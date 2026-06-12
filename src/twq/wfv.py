@@ -65,20 +65,32 @@ def run_wfv(
     params_space: dict,
     stages: list[Stage],
     select_metric=lambda res: res.sharpe(),
+    tiebreak_eps: float | None = None,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """Expanding-window walk-forward: per stage, grid-search on train, freeze
-    best params, evaluate on test. Returns a stage-level report."""
+    best params, evaluate on test. Returns a stage-level report.
+
+    tiebreak_eps: if set, combos within eps of the best train metric are tied
+    and the lowest-train-turnover one wins (must be pre-registered, not tuned).
+    """
     rows = []
     candidates = grid(params_space)
     for i, st in enumerate(stages):
-        best, best_score, best_train = None, -np.inf, None
+        evals = []  # (params, train metric, train annualized turnover)
         for p in candidates:
             W = make_weights(p, st.train_start, st.train_end)
             res = backtest.run(W, start=st.train_start, end=st.train_end)
             score = select_metric(res)
-            if np.isfinite(score) and score > best_score:
-                best, best_score, best_train = p, score, res
+            if np.isfinite(score):
+                evals.append((p, score, res.summary().get("ann_turnover") or 0.0))
+        top = max(e[1] for e in evals)
+        if tiebreak_eps:
+            best, best_score, best_to = min(
+                (e for e in evals if e[1] >= top - tiebreak_eps), key=lambda e: e[2]
+            )
+        else:
+            best, best_score, best_to = max(evals, key=lambda e: e[1])
         W = make_weights(best, st.train_start, st.test_end)
         res = backtest.run(W, start=st.test_start, end=st.test_end)
         s = res.summary()
@@ -88,6 +100,7 @@ def run_wfv(
             "test_end": st.test_end,
             "params": str(best),
             "train_sharpe": round(best_score, 3),
+            "train_to": round(best_to, 1),
             "oos_sharpe": s.get("sharpe"),
             "oos_cagr": s.get("cagr"),
             "oos_maxdd": s.get("maxdd"),

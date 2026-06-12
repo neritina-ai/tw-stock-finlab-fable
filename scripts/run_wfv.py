@@ -59,6 +59,13 @@ SPACES = {
         "top_n": [30, 50],
         "regime": ["taiex_half"],
     },
+    "lgbm_ic_adaptive": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "ic_gamma": [1, 3],
+        "regime": ["taiex_half"],
+    },
 }
 
 
@@ -76,13 +83,24 @@ METRICS = {"lgbm_stockonly": _sharpe_to_penalized}
 
 
 def main() -> None:
-    name = sys.argv[1] if len(sys.argv) > 1 else "px_composite"
+    args = sys.argv[1:]
+    tb = None  # --tiebreak 0.05: eps tie-break toward lowest train turnover
+    if "--tiebreak" in args:
+        i = args.index("--tiebreak")
+        tb = float(args[i + 1])
+        del args[i : i + 2]
+    name = args[0] if args else "px_composite"
     mod = importlib.import_module(f"twq.strategies.{name}")
     stages = wfv.make_stages(first_test="2014-01-01", test_years=2)
     rep = wfv.run_wfv(
-        mod.make_weights, SPACES[name], stages, select_metric=METRICS.get(name, _sharpe)
+        mod.make_weights,
+        SPACES[name],
+        stages,
+        select_metric=METRICS.get(name, _sharpe),
+        tiebreak_eps=tb,
     )
-    out = Path(__file__).resolve().parent.parent / "research" / f"wfv_{name}.csv"
+    suffix = "_tb" if tb else ""
+    out = Path(__file__).resolve().parent.parent / "research" / f"wfv_{name}{suffix}.csv"
     rep.to_csv(out, index=False)
     print(f"saved {out}")
 
