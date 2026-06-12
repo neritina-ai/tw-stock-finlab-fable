@@ -66,6 +66,18 @@ SPACES = {
         "ic_gamma": [1, 3],
         "regime": ["taiex_half"],
     },
+    "lgbm_ind_neutral": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],
+    },
+    "lgbm_ind_size": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],
+    },
 }
 
 
