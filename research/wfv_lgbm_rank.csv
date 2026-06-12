@@ -1,0 +1,7 @@
+stage,test_start,test_end,params,train_sharpe,oos_sharpe,oos_cagr,oos_maxdd,ann_turnover,avg_pos
+1,2014-01-01,2015-12-31,"{'band_mult': 4.0, 'hold_smooth': 4, 'top_n': 30, 'regime': 'none'}",0.727,0.797,0.106,-0.19,10.6,30.1
+2,2016-01-01,2017-12-31,"{'band_mult': 2.0, 'hold_smooth': 4, 'top_n': 30, 'regime': 'taiex'}",0.906,1.644,0.1995,-0.1031,16.3,30.6
+3,2018-01-01,2019-12-31,"{'band_mult': 2.0, 'hold_smooth': 4, 'top_n': 50, 'regime': 'taiex'}",1.136,0.271,0.0204,-0.1317,15.6,35.5
+4,2020-01-01,2021-12-31,"{'band_mult': 2.0, 'hold_smooth': 4, 'top_n': 50, 'regime': 'none'}",1.046,1.664,0.4088,-0.3421,14.5,51.1
+5,2022-01-01,2023-12-31,"{'band_mult': 4.0, 'hold_smooth': 1, 'top_n': 30, 'regime': 'taiex'}",1.235,2.141,0.1943,-0.0527,14.4,30.0
+6,2024-01-01,2026-04-19,"{'band_mult': 4.0, 'hold_smooth': 1, 'top_n': 30, 'regime': 'taiex'}",1.335,0.84,0.1325,-0.1988,19.3,30.6

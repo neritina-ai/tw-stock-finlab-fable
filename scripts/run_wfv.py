@@ -23,6 +23,12 @@ SPACES = {
         "vol_target": [None, 0.12, 0.18],
         "regime": ["taiex", "breadth"],
     },
+    "lgbm_rank": {
+        "band_mult": [2.0, 4.0],
+        "hold_smooth": [1, 4],
+        "top_n": [30, 50],
+        "regime": ["taiex", "none"],
+    },
 }
 
 
