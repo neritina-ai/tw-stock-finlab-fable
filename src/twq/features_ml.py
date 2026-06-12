@@ -1,8 +1,13 @@
-"""Price/volume feature matrix + weekly sample table for ML ranking.
+"""Price/volume + fundamental/chip feature matrix + weekly sample table.
 
-Finlab free-tier fundamentals truncate at 2018-12-28, so every feature here is
-derived from the local OHLCV/turnover matrices (2007-04 onward) to keep the
-full WFV period (2008-2026) validatable.
+Finlab's free tier serves HISTORY ONLY (everything ends 2018-12-28): monthly
+revenue from 2005, margin balances from 2009, valuation ratios from 2010,
+institutional flows from 2012-05. Price/volume features come from the local
+OHLCV/turnover matrices (2007-04 through 2026) and cover the full WFV period;
+the FUND_FEATS block covers 2005/2009/2010/2012 → 2018-12-28 and is NaN
+outside coverage (ffill limits stop values from staling past the cutoff).
+Models that use FUND_FEATS are only meaningful through 2018 — downstream the
+splice strategy switches to a price-only panel after that.
 
 Alignment convention: one sample per (weekly trade day d, stock). Features are
 computed at the previous trading day t = d-1 (the last close known when
@@ -31,6 +36,19 @@ HORIZON = 21  # forward trading days for the label
 CACHE = D.DERIVED / "ml_weekly_h21.parquet"
 
 MARKET_FEATS = ["mkt_mom63", "mkt_vol21", "mkt_dd"]
+
+FUND_FEATS = [
+    "rev_yoy", "rev_mom", "rev_yoy3", "rev_acc", "rev_nh12",
+    "mgn_chg21", "mgn_pos126",
+    "fgn21", "fgn63", "tru21",
+    "ey", "bp", "dy",
+]
+
+
+def _to_num(df: pd.DataFrame) -> pd.DataFrame:
+    if (df.dtypes == object).any():
+        return df.apply(pd.to_numeric, errors="coerce")
+    return df
 
 
 def _stock_panels() -> dict[str, pd.DataFrame]:
@@ -95,6 +113,72 @@ def _stock_panels() -> dict[str, pd.DataFrame]:
     return f
 
 
+def _fund_panels(days: pd.DatetimeIndex, cols: pd.Index) -> dict[str, pd.DataFrame]:
+    """Daily matrices for the long-history finlab fundamentals/chips.
+
+    Index dates are publication dates (monthly revenue is stamped at the
+    statutory deadline, the 10th of the next month; margin/institutional/
+    valuation data is published the same evening), so the table builder's
+    t = d-1 convention (trade at the NEXT open) keeps everything point-in-time.
+    """
+
+    def daily(df: pd.DataFrame, limit: int) -> pd.DataFrame:
+        df = _to_num(df).reindex(columns=cols)
+        return df.reindex(days.union(df.index)).ffill(limit=limit).reindex(days)
+
+    # monthly revenue (2005-02 .. 2018-12): yoy level/trend/acceleration + 12m high
+    rev = _to_num(D.load("rev").reindex(columns=cols))
+    yoy = _to_num(D.load("rev_yoy").reindex(columns=cols))
+    monthly = {
+        "rev_yoy": yoy,
+        "rev_mom": _to_num(D.load("rev_mom").reindex(columns=cols)),
+        "rev_yoy3": yoy.rolling(3, min_periods=2).mean(),
+        "rev_acc": yoy - yoy.shift(3),
+        "rev_nh12": rev / rev.rolling(12, min_periods=6).max(),
+    }
+    # ~21 trading days between deadlines; limit 30 lets a missed report go NaN
+    f = {
+        k: v.reindex(days.union(v.index)).ffill(limit=30).reindex(days)
+        for k, v in monthly.items()
+    }
+
+    # margin balance (2009-01 .. 2018-12): retail leverage flow and range position
+    bal = daily(D.load("margin_balance"), 5)
+    f["mgn_chg21"] = bal / bal.shift(21) - 1
+    lo = bal.rolling(126, min_periods=63).min()
+    hi = bal.rolling(126, min_periods=63).max()
+    f["mgn_pos126"] = (bal - lo) / (hi - lo).replace(0, np.nan)
+
+    # institutional net-buy shares (2012-05 .. 2018-12), in days-of-median-volume;
+    # inside coverage a missing cell means "no net trade" (0), outside it stays NaN
+    vol = D.load("volume")
+    vmed = vol.rolling(63, min_periods=30).median().replace(0, np.nan)
+
+    def flow(name: str) -> pd.DataFrame:
+        raw = _to_num(D.load(name).reindex(columns=cols)).reindex(days)
+        valid = raw.notna().any(axis=1)
+        if not valid.any():
+            return raw
+        first, last = valid.idxmax(), valid[::-1].idxmax()
+        g = raw.fillna(0.0)
+        g.loc[g.index < first] = np.nan
+        g.loc[g.index > last] = np.nan
+        return g
+
+    fgn, tru = flow("ii_foreign"), flow("ii_trust")
+    f["fgn21"] = fgn.rolling(21, min_periods=15).sum() / (vmed * 21)
+    f["fgn63"] = fgn.rolling(63, min_periods=40).sum() / (vmed * 63)
+    f["tru21"] = tru.rolling(21, min_periods=15).sum() / (vmed * 21)
+
+    # daily valuation ratios (2010-01 .. 2018-12)
+    per = daily(D.load("per"), 5)
+    pbr = daily(D.load("pbr"), 5)
+    f["ey"] = 1.0 / per.where(per > 0)
+    f["bp"] = 1.0 / pbr.where(pbr > 0)
+    f["dy"] = daily(D.load("dividend_yield"), 5)
+    return f
+
+
 def _market_feats(days: pd.DatetimeIndex) -> pd.DataFrame:
     mkt = D.load("twse_index")["close"].reindex(days).ffill()
     rm = mkt.pct_change(fill_method=None)
@@ -129,6 +213,7 @@ def build_weekly_table(refresh: bool = False) -> pd.DataFrame:
 
     panels = _stock_panels()
     cols = E.columns
+    panels.update(_fund_panels(days, cols))
 
     # label at d: open(d+21)/open(d)-1, ranked among eligible at d
     ao = D.adj_ohlc()["open"]

@@ -11,13 +11,18 @@ Output: data/derived/lgbm_scores_h21.parquet (weekly trade days x stocks),
 research/lgbm_feature_importance.csv, and per-segment Spearman rank-IC
 diagnostics on stdout.
 
---no-market-feats (attempt 4, lgbm-stockonly) drops the 3 market-state
-columns from X so the model learns a pure cross-sectional stock ranking;
-regime/exposure is then handled by a portfolio overlay instead of tree
-interactions (which caused wholesale book flips when a market feature
-crossed a split threshold). Writes lgbm_scores_h21_nomkt.parquet.
+--feature-set picks the X columns (market-state features stay excluded in
+"nomkt"/"fund" so regime/exposure is handled by a portfolio overlay, not tree
+interactions — attempt 3's wholesale-book-flip lesson):
 
-Usage: uv run python scripts/train_lgbm_scores.py [--refresh-table] [--no-market-feats]
+- full:  stock + market features (attempt 3, lgbm_scores_h21.parquet)
+- nomkt: stock features only (attempt 4, lgbm_scores_h21_nomkt.parquet)
+- fund:  stock + fundamental/chip features (attempt 5, lgbm_scores_h21_fund
+         .parquet) — fund columns are live 2005..2018-12-28 only (finlab free
+         tier serves history only), so this panel is meaningful through 2018
+         and downstream splicing switches to nomkt after.
+
+Usage: uv run python scripts/train_lgbm_scores.py [--refresh-table] [--feature-set nomkt|fund]
 """
 
 import argparse
@@ -61,16 +66,23 @@ def main() -> None:
     ap.add_argument("--refit-weeks", type=int, default=26)
     ap.add_argument("--first-score", default="2011-01-01")
     ap.add_argument("--trees", type=int, default=400)
-    ap.add_argument("--no-market-feats", action="store_true")
+    ap.add_argument("--no-market-feats", action="store_true")  # alias: --feature-set nomkt
+    ap.add_argument("--feature-set", choices=["full", "nomkt", "fund"], default="full")
     args = ap.parse_args()
+    fset = "nomkt" if args.no_market_feats else args.feature_set
 
     t0 = time.time()
     table = FM.build_weekly_table(refresh=args.refresh_table)
     feats = FM.feature_names(table)
-    suffix = ""
-    if args.no_market_feats:
-        feats = [f for f in feats if f not in FM.MARKET_FEATS]
+    if fset == "full":  # attempt-3 semantics: stock + market
+        feats = [f for f in feats if f not in FM.FUND_FEATS]
+        suffix = ""
+    elif fset == "nomkt":
+        feats = [f for f in feats if f not in FM.MARKET_FEATS and f not in FM.FUND_FEATS]
         suffix = "_nomkt"
+    else:  # fund: stock + fundamental/chip
+        feats = [f for f in feats if f not in FM.MARKET_FEATS]
+        suffix = "_fund"
     dates = np.sort(table["date"].unique())
     print(
         f"table: {len(table):,} rows, {len(feats)} feats, "

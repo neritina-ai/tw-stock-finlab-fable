@@ -35,6 +35,12 @@ SPACES = {
         "top_n": [30, 50],
         "regime": ["taiex", "taiex_half", "none"],
     },
+    "lgbm_fund_splice": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],  # fixed: attempt-4 ceilings say never worst
+    },
 }
 
 
