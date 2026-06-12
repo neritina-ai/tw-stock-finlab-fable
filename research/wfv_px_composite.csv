@@ -1,0 +1,8 @@
+stage,test_start,test_end,params,train_sharpe,oos_sharpe,oos_cagr,oos_maxdd,ann_turnover,avg_pos
+1,2014-01-01,2015-12-31,"{'preset': 'defensive', 'top_n': 30, 'risk_off_scale': 0.0}",1.265,0.704,0.0485,-0.0742,11.0,30.1
+2,2016-01-01,2017-12-31,"{'preset': 'defensive', 'top_n': 30, 'risk_off_scale': 0.0}",1.144,1.791,0.1363,-0.0522,12.7,31.1
+3,2018-01-01,2019-12-31,"{'preset': 'defensive', 'top_n': 30, 'risk_off_scale': 0.0}",1.239,0.624,0.0476,-0.0969,11.9,24.8
+4,2020-01-01,2021-12-31,"{'preset': 'defensive', 'top_n': 30, 'risk_off_scale': 0.0}",1.145,1.826,0.1948,-0.0735,13.7,31.4
+5,2022-01-01,2023-12-31,"{'preset': 'defensive', 'top_n': 30, 'risk_off_scale': 0.0}",1.251,0.834,0.0492,-0.0738,9.6,17.6
+6,2024-01-01,2025-12-31,"{'preset': 'defensive', 'top_n': 50, 'risk_off_scale': 0.0}",1.224,1.222,0.1235,-0.0855,12.6,50.4
+7,2026-01-01,2026-04-19,"{'preset': 'defensive', 'top_n': 50, 'risk_off_scale': 0.0}",1.223,2.101,0.2912,-0.0516,16.6,50.0

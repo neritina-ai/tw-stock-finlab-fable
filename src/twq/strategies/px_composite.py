@@ -77,7 +77,7 @@ def make_weights(params: dict, start: str, end: str) -> pd.DataFrame:
 
     scale = pd.Series(1.0, index=rebal_days)
     if params.get("risk_off_scale", 1.0) < 1.0:
-        on = risk_on.shift(1).reindex(rebal_days).fillna(True)
+        on = risk_on.shift(1).reindex(rebal_days).fillna(True).astype(bool)
         scale[~on] = params["risk_off_scale"]
     W = W.mul(scale, axis=0)
 
