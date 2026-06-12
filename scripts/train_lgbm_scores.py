@@ -7,9 +7,10 @@ approximation), then scores all weekly dates in [c_i, c_{i+1}). Every score
 in the output panel is therefore strictly out-of-sample, so downstream WFV
 train-window selection on the panel stays leak-free.
 
-Output: data/derived/lgbm_scores_h21.parquet (weekly trade days x stocks),
-research/lgbm_feature_importance.csv, and per-segment Spearman rank-IC
-diagnostics on stdout.
+Output: data/derived/lgbm_scores_h{horizon}{suffix}.parquet (weekly trade days
+x stocks), research/lgbm_feature_importance*.csv, and per-segment Spearman
+rank-IC diagnostics on stdout. --horizon (default 21) picks the label window
+and the cached feature table (one per horizon).
 
 --feature-set picks the X columns (market-state features stay excluded in
 "nomkt"/"fund" so regime/exposure is handled by a portfolio overlay, not tree
@@ -66,13 +67,14 @@ def main() -> None:
     ap.add_argument("--refit-weeks", type=int, default=26)
     ap.add_argument("--first-score", default="2011-01-01")
     ap.add_argument("--trees", type=int, default=400)
+    ap.add_argument("--horizon", type=int, default=21)  # label window, trading days
     ap.add_argument("--no-market-feats", action="store_true")  # alias: --feature-set nomkt
     ap.add_argument("--feature-set", choices=["full", "nomkt", "fund"], default="full")
     args = ap.parse_args()
     fset = "nomkt" if args.no_market_feats else args.feature_set
 
     t0 = time.time()
-    table = FM.build_weekly_table(refresh=args.refresh_table)
+    table = FM.build_weekly_table(refresh=args.refresh_table, horizon=args.horizon)
     feats = FM.feature_names(table)
     if fset == "full":  # attempt-3 semantics: stock + market
         feats = [f for f in feats if f not in FM.FUND_FEATS]
@@ -136,13 +138,14 @@ def main() -> None:
     allsc = pd.concat(scores)
     panel = allsc.pivot(index="date", columns="stock", values="score")
     panel = panel.reindex(columns=D.load("close").columns)
-    out = D.DERIVED / f"lgbm_scores_h21{suffix}.parquet"
+    out = D.DERIVED / f"lgbm_scores_h{args.horizon}{suffix}.parquet"
     panel.to_parquet(out)
 
     icv = pd.Series(ics)
     print(f"\nsegments={len(icv)} mean_IC={icv.mean():.4f} IC_IR(ann)={icv.mean()/icv.std()*np.sqrt(len(icv)/15):.2f}")
     fi = pd.Series(imps, index=feats).sort_values(ascending=False)
-    fi.to_csv(Path(__file__).resolve().parent.parent / "research" / f"lgbm_feature_importance{suffix}.csv")
+    hpart = "" if args.horizon == 21 else f"_h{args.horizon}"  # keep legacy h21 filenames
+    fi.to_csv(Path(__file__).resolve().parent.parent / "research" / f"lgbm_feature_importance{hpart}{suffix}.csv")
     print("top features by gain:")
     print((fi / fi.sum()).head(12).round(4).to_string())
     print(f"saved {out}  total {time.time()-t0:.0f}s")

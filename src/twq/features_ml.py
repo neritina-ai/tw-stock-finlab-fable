@@ -14,7 +14,8 @@ computed at the previous trading day t = d-1 (the last close known when
 trading at d's open) but stored indexed by d — i.e. the table and the score
 panels built from it are ALREADY shifted; consumers must not shift again.
 
-Label: y_raw = adj_open(d+21) / adj_open(d) - 1, exactly the window a trade
+Label: y_raw = adj_open(d+horizon) / adj_open(d) - 1 (default horizon 21,
+build_weekly_table caches one table per horizon), exactly the window a trade
 entered at d's open can capture (no overnight-gap leak from using closes).
 y_rank is its cross-sectional percentile among eligible names at d — every
 date has mean 0.5, so the per-day-constant market features can only matter
@@ -32,8 +33,11 @@ from . import data as D
 from . import factors as F
 from . import universe as U
 
-HORIZON = 21  # forward trading days for the label
-CACHE = D.DERIVED / "ml_weekly_h21.parquet"
+HORIZON = 21  # default forward trading days for the label
+
+
+def _cache_path(horizon: int):
+    return D.DERIVED / f"ml_weekly_h{horizon}.parquet"
 
 MARKET_FEATS = ["mkt_mom63", "mkt_vol21", "mkt_dd"]
 
@@ -192,14 +196,15 @@ def _market_feats(days: pd.DatetimeIndex) -> pd.DataFrame:
     )
 
 
-def build_weekly_table(refresh: bool = False) -> pd.DataFrame:
+def build_weekly_table(refresh: bool = False, horizon: int = HORIZON) -> pd.DataFrame:
     """Long table: one row per (weekly trade day, eligible stock).
 
     Columns: date, stock, <ranked stock feats>, <raw market feats>, y_rank,
-    y_end. Cached to data/derived/ml_weekly_h21.parquet.
+    y_end. Cached per horizon to data/derived/ml_weekly_h{horizon}.parquet.
     """
-    if CACHE.exists() and not refresh:
-        return pd.read_parquet(CACHE)
+    cache = _cache_path(horizon)
+    if cache.exists() and not refresh:
+        return pd.read_parquet(cache)
 
     days = D.trading_days()
     ws = F.week_starts(days).sort_values()
@@ -215,13 +220,13 @@ def build_weekly_table(refresh: bool = False) -> pd.DataFrame:
     cols = E.columns
     panels.update(_fund_panels(days, cols))
 
-    # label at d: open(d+21)/open(d)-1, ranked among eligible at d
+    # label at d: open(d+horizon)/open(d)-1, ranked among eligible at d
     ao = D.adj_ohlc()["open"]
-    y_raw = (ao.shift(-HORIZON) / ao - 1).iloc[pos]
+    y_raw = (ao.shift(-horizon) / ao - 1).iloc[pos]
     y_raw.index = ws
     y_rank = y_raw.where(E).rank(axis=1, pct=True)
 
-    end_pos = pos + HORIZON
+    end_pos = pos + horizon
     y_end = pd.Series(
         [days[p] if p < len(days) else pd.NaT for p in end_pos], index=ws
     )
@@ -244,7 +249,7 @@ def build_weekly_table(refresh: bool = False) -> pd.DataFrame:
     out["y_end"] = y_end.to_numpy()[rix]
 
     table = pd.DataFrame(out)
-    table.to_parquet(CACHE, index=False)
+    table.to_parquet(cache, index=False)
     return table
 
 

@@ -41,6 +41,24 @@ SPACES = {
         "top_n": [30, 50],
         "regime": ["taiex_half"],  # fixed: attempt-4 ceilings say never worst
     },
+    "lgbm_h63_ensemble": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],
+    },
+    "lgbm_fund_blend": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],
+    },
+    "lgbm_mix_all4": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "regime": ["taiex_half"],
+    },
 }
 
 
