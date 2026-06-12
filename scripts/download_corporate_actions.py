@@ -95,7 +95,7 @@ def fetch_twse(report: str, chunks) -> pd.DataFrame:
 
 
 def fetch_tpex_exdiv() -> pd.DataFrame:
-    rows, fields = [], None
+    frames = []
     for s, e in months(START, END):
         url = "https://www.tpex.org.tw/web/stock/exright/dailyquo/exDailyQ_result.php"
         params = {"l": "zh-tw", "d": roc(s), "ed": roc(e)}
@@ -111,15 +111,18 @@ def fetch_tpex_exdiv() -> pd.DataFrame:
             continue
         tables = d.get("tables") or []
         if tables:
-            if tables[0].get("fields"):
-                fields = tables[0]["fields"]
+            fields = tables[0].get("fields") or []
             data = tables[0].get("data") or []
-            rows.extend(data)
+            if data:
+                width = max(len(row) for row in data)
+                cols = list(fields) + [f"extra_{i}" for i in range(len(fields), width)]
+                data = [list(row) + [None] * (width - len(row)) for row in data]
+                frames.append(pd.DataFrame(data, columns=cols[:width]))
             print(f"  [tpex] {s}..{e}: {len(data)} rows")
         time.sleep(SLEEP)
-    if not rows:
+    if not frames:
         return pd.DataFrame()
-    return pd.DataFrame(rows, columns=fields)
+    return pd.concat(frames, ignore_index=True, sort=False)
 
 
 def main() -> None:

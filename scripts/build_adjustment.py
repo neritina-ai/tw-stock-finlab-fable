@@ -174,14 +174,15 @@ def main() -> None:
     events = pd.concat([events, syn_recent], ignore_index=True)
     events = events.groupby(["date", "stock"], as_index=False).factor.prod()
 
-    fmat = pd.DataFrame(1.0, index=close.index, columns=close.columns)
     ev_in_grid = events[events.date.isin(close.index) & events.stock.isin(close.columns)]
     skipped = len(events) - len(ev_in_grid)
     if skipped:
         print(f"  ({skipped} events off-grid skipped)")
-    fmat.values[
+    arr = np.ones(close.shape)
+    arr[
         close.index.get_indexer(ev_in_grid.date), close.columns.get_indexer(ev_in_grid.stock)
     ] = ev_in_grid.factor.to_numpy()
+    fmat = pd.DataFrame(arr, index=close.index, columns=close.columns)
 
     # adj_factor[t] = prod of event factors AFTER t  (event on day e applies to days < e)
     adj_factor = fmat.iloc[::-1].cumprod().iloc[::-1].shift(-1, fill_value=1.0)

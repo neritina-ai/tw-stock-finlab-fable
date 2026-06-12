@@ -71,6 +71,7 @@ def monthly_to_daily(mdf: pd.DataFrame, pub_day: int = 10) -> pd.DataFrame:
     return out.reindex(columns=load("close").columns)
 
 
+@lru_cache(maxsize=1)
 def adj_ohlc() -> dict[str, pd.DataFrame]:
     """Adjusted open/high/low/close built by scripts/build_adjustment.py."""
     factor = load("adj_factor")  # cumulative, anchored 1.0 at the last day
