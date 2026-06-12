@@ -1,0 +1,97 @@
+"""Walk-forward validation framework.
+
+A strategy is a callable `make_weights(params, start, end) -> DataFrame` that
+must only use information available at each emitted date (caller-shifted).
+For each stage, hyperparameters are chosen on the training window (expanding,
+from `data_start`) and evaluated frozen on the unseen test window. The stop
+condition for the research program is: every stage's out-of-sample net
+Sharpe > 2.
+"""
+
+import itertools
+from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+
+from . import backtest
+
+
+@dataclass
+class Stage:
+    train_start: str
+    train_end: str  # exclusive
+    test_start: str
+    test_end: str
+
+
+def make_stages(
+    data_start: str = "2008-06-01",
+    first_test: str = "2014-01-01",
+    last_test: str = "2026-04-19",
+    test_years: int = 2,
+) -> list[Stage]:
+    stages = []
+    t = pd.Timestamp(first_test)
+    last = pd.Timestamp(last_test)
+    while t < last:
+        te = min(t + pd.DateOffset(years=test_years), last + pd.Timedelta(days=1))
+        stages.append(
+            Stage(
+                train_start=data_start,
+                train_end=str(t.date()),
+                test_start=str(t.date()),
+                test_end=str((te - pd.Timedelta(days=1)).date()),
+            )
+        )
+        t = te
+    return stages
+
+
+def grid(params_space: dict) -> list[dict]:
+    keys = list(params_space)
+    return [dict(zip(keys, vals)) for vals in itertools.product(*params_space.values())]
+
+
+def run_wfv(
+    make_weights,
+    params_space: dict,
+    stages: list[Stage],
+    select_metric=lambda res: res.sharpe(),
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """Expanding-window walk-forward: per stage, grid-search on train, freeze
+    best params, evaluate on test. Returns a stage-level report."""
+    rows = []
+    candidates = grid(params_space)
+    for i, st in enumerate(stages):
+        best, best_score, best_train = None, -np.inf, None
+        for p in candidates:
+            W = make_weights(p, st.train_start, st.train_end)
+            res = backtest.run(W, start=st.train_start, end=st.train_end)
+            score = select_metric(res)
+            if np.isfinite(score) and score > best_score:
+                best, best_score, best_train = p, score, res
+        W = make_weights(best, st.train_start, st.test_end)
+        res = backtest.run(W, start=st.test_start, end=st.test_end)
+        s = res.summary()
+        row = {
+            "stage": i + 1,
+            "test_start": st.test_start,
+            "test_end": st.test_end,
+            "params": str(best),
+            "train_sharpe": round(best_score, 3),
+            "oos_sharpe": s.get("sharpe"),
+            "oos_cagr": s.get("cagr"),
+            "oos_maxdd": s.get("maxdd"),
+            "ann_turnover": s.get("ann_turnover"),
+            "avg_pos": s.get("avg_positions"),
+        }
+        rows.append(row)
+        if verbose:
+            print(row)
+    rep = pd.DataFrame(rows)
+    if verbose and len(rep):
+        ok = (rep.oos_sharpe > 2).all()
+        print(f"\nWFV stages passed (Sharpe>2): {(rep.oos_sharpe > 2).sum()}/{len(rep)}  -> {'STOP CONDITION MET' if ok else 'not met'}")
+    return rep
