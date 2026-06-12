@@ -115,3 +115,95 @@ def run_wfv(
         ok = (rep.oos_sharpe > 2).all()
         print(f"\nWFV stages passed (Sharpe>2): {(rep.oos_sharpe > 2).sum()}/{len(rep)}  -> {'STOP CONDITION MET' if ok else 'not met'}")
     return rep
+
+
+def _sharpe_of(ret: pd.Series, ann: int = 252) -> float:
+    r = ret.dropna()
+    if len(r) < 20 or r.std() == 0:
+        return np.nan
+    return float(r.mean() / r.std() * np.sqrt(ann))
+
+
+def run_wfv_variants(
+    make_weights,
+    params_space: dict,
+    stages: list[Stage],
+    variants: list[dict],
+    verbose: bool = True,
+) -> dict[str, pd.DataFrame]:
+    """Selection-layer variants sharing one train pass per stage.
+
+    Each variant is {"name": str, "k": int, "recent_years": int | None}:
+    combos are ranked by train Sharpe computed on the full train window
+    (recent_years=None) or only its trailing `recent_years` years (the
+    strategy itself still trains on the full window - only the selection
+    metric window changes), and the top-k are kept. For k>1 the OOS result is the
+    equal-weight mean of the k sleeves' net daily return series
+    (portfolio-of-portfolios; each sleeve's costs are netted inside its own
+    backtest, and cross-sleeve netting of overlapping trades could only
+    lower real costs, so the combined series is conservatively implementable).
+    k and recent_years must be pre-registered, not tuned on OOS.
+    """
+    candidates = grid(params_space)
+    metric_windows = {v.get("recent_years") for v in variants}
+    reports: dict[str, list] = {v["name"]: [] for v in variants}
+    for i, st in enumerate(stages):
+        evals = []  # (params, {recent_years_or_None: train sharpe})
+        for p in candidates:
+            W = make_weights(p, st.train_start, st.train_end)
+            res = backtest.run(W, start=st.train_start, end=st.train_end)
+            scores = {}
+            for ry in metric_windows:
+                r = res.ret
+                if ry is not None:
+                    r = r.loc[r.index >= pd.Timestamp(st.train_end) - pd.DateOffset(years=ry)]
+                scores[ry] = _sharpe_of(r)
+            evals.append((p, scores))
+
+        oos_cache: dict[str, backtest.Result] = {}
+
+        def _oos(p: dict) -> backtest.Result:
+            key = str(sorted(p.items()))
+            if key not in oos_cache:
+                W = make_weights(p, st.train_start, st.test_end)
+                oos_cache[key] = backtest.run(W, start=st.test_start, end=st.test_end)
+            return oos_cache[key]
+
+        for v in variants:
+            ry = v.get("recent_years")
+            ranked = sorted(
+                (e for e in evals if np.isfinite(e[1][ry])),
+                key=lambda e: e[1][ry],
+                reverse=True,
+            )
+            picks = ranked[: v["k"]]
+            sleeves = [_oos(p) for p, _ in picks]
+            comb = pd.concat([s.ret for s in sleeves], axis=1).mean(axis=1)
+            to = pd.concat([s.turnover for s in sleeves], axis=1).mean(axis=1)
+            wsum = sum(s.weights for s in sleeves) / len(sleeves)
+            pos = (wsum > 1e-6).sum(axis=1)
+            nav = (1 + comb).cumprod()
+            years = len(comb) / 252
+            row = {
+                "stage": i + 1,
+                "test_start": st.test_start,
+                "test_end": st.test_end,
+                "params": " | ".join(str(p) for p, _ in picks),
+                "train_sharpe": round(picks[0][1][ry], 3),
+                "oos_sharpe": round(_sharpe_of(comb), 3),
+                "oos_cagr": round(float(nav.iloc[-1] ** (1 / years) - 1), 4),
+                "oos_maxdd": round(float((nav / nav.cummax() - 1).min()), 4),
+                "ann_turnover": round(float(to.mean() * 252), 1),
+                "avg_pos": round(float(pos[pos > 0].mean()), 1) if (pos > 0).any() else 0.0,
+            }
+            reports[v["name"]].append(row)
+            if verbose:
+                print(v["name"], row)
+    out = {}
+    for v in variants:
+        rep = pd.DataFrame(reports[v["name"]])
+        out[v["name"]] = rep
+        if verbose and len(rep):
+            n_ok = (rep.oos_sharpe > 2).sum()
+            print(f"\n[{v['name']}] stages passed (Sharpe>2): {n_ok}/{len(rep)}  -> {'STOP CONDITION MET' if n_ok == len(rep) else 'not met'}")
+    return out
