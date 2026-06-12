@@ -5,3 +5,4 @@
 | # | 研究 | 一句話結論 |
 |---|------|-----------|
 | 1 | [px-composite-v1](px-composite-v1.md) | 價量複合因子月頻基線：WFV 1/7 階段達標（OOS Sharpe 0.6-2.1），defensive 因子+regime 避險方向正確但 alpha 與成本皆需改善。 |
+| 2 | [band-voltarget](band-voltarget.md) | 週頻 slow_keep banding 把周轉 12x→3-9x（成功、之後沿用），但 WFV 0/6：事後最佳也只 ~1.8，價量 defensive 家族 alpha 天花板已到，須換 ML 排序引擎；breadth gate 訓練期過擬合。 |

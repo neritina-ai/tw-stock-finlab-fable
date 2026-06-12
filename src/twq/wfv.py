@@ -30,21 +30,28 @@ def make_stages(
     first_test: str = "2014-01-01",
     last_test: str = "2026-04-19",
     test_years: int = 2,
+    min_test_days: int = 365,
 ) -> list[Stage]:
-    stages = []
+    starts = []
     t = pd.Timestamp(first_test)
     last = pd.Timestamp(last_test)
     while t < last:
-        te = min(t + pd.DateOffset(years=test_years), last + pd.Timedelta(days=1))
+        starts.append(t)
+        t = t + pd.DateOffset(years=test_years)
+    # a final stub shorter than min_test_days is merged into the previous stage
+    if len(starts) > 1 and (last - starts[-1]).days < min_test_days:
+        starts.pop()
+    stages = []
+    for i, s in enumerate(starts):
+        te = starts[i + 1] - pd.Timedelta(days=1) if i + 1 < len(starts) else last
         stages.append(
             Stage(
                 train_start=data_start,
-                train_end=str(t.date()),
-                test_start=str(t.date()),
-                test_end=str((te - pd.Timedelta(days=1)).date()),
+                train_end=str(s.date()),
+                test_start=str(s.date()),
+                test_end=str(te.date()),
             )
         )
-        t = te
     return stages
 
 
