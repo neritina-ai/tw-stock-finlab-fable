@@ -5,7 +5,7 @@
 
 ## 開發紀錄
 
-- 研究紀錄索引：[research/INDEX.md](research/INDEX.md)
+- 研究紀錄索引：[research/README.md](research/README.md)
 - AI model：本專案由 **Claude Fable 5** (Anthropic) 開發。
 
 ## 結構
@@ -22,7 +22,7 @@ data/           本地資料快取（gitignored；parquet）
 ```
 python -m venv .venv && .venv\Scripts\activate
 pip install -e .
-set FINLAB_API_KEY=<your token>
+set FINLAB_API_TOKEN=<your token>
 python scripts/download_finlab.py
 ```
 

@@ -63,9 +63,9 @@ def main() -> None:
     import finlab
     from finlab import data
 
-    token = os.getenv("FINLAB_API_KEY") or os.getenv("FINLAB_API_TOKEN")
+    token = os.getenv("FINLAB_API_TOKEN")
     if not token:
-        sys.exit("FINLAB_API_KEY not set")
+        sys.exit("FINLAB_API_TOKEN not set")
     finlab.login(token)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
