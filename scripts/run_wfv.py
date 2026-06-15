@@ -78,6 +78,13 @@ SPACES = {
         "top_n": [30, 50],
         "regime": ["taiex_half"],
     },
+    "lgbm_reversal_blend": {
+        "band_mult": [4.0, 8.0],
+        "hold_smooth": [4, 8],
+        "top_n": [30, 50],
+        "rev_w": [0.25, 0.5],  # static blend weight of industry-neutral reversal
+        "regime": ["taiex_half"],
+    },
 }
 
 
