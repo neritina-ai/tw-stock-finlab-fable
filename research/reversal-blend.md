@@ -47,7 +47,7 @@ attempt 7/8/9 三路證偽「重組現有 LGBM 訊號」(選參、IC 權重、�
 
 ## 持股樣貌(摻入後書冊偏離,而偏離方向沒有 alpha)
 
-raw top-30(banding 前)blend 與 all4 的重疊、每週換手(`scripts/_tmp_books.py` 量過後刪除):
+raw top-30(banding 前)blend 與 all4 的重疊、每週換手(`scripts/reversal_holdings.py`,可重跑重現):
 
 | 代表日(段) | w0.25 ∩ all4 | w0.5 ∩ all4 |
 |---|---|---|
